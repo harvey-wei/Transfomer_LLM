@@ -1,0 +1,9 @@
+# config/text_data/tiny_stories.yaml
+train_path: data/TinyStoriesV2-GPT4-train.txt
+val_path: data/TinyStoriesV2-GPT4-valid.txt
+train_encoded_path: data/TinyStoriesV2-GPT4-train.npy
+val_encoded_path: data/TinyStoriesV2-GPT4-valid.npy
+vocab_path: data/vocab_tiny_stories_train.json
+merges_path: data/merges_tiny_stories_train.json
+special_tokens: ["<|endoftext|>"]
+vocab_size: 10000

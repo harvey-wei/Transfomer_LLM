@@ -1,0 +1,36 @@
+#config/config.yaml
+defaults:
+  - _self_            # load this config file first
+  - model: small      # Then load the model/small.yaml
+  - training: fast    # Then load the training/fast.yaml
+  - text_data: tiny_stories
+
+# Global hydra settings for single run and sweep
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}  # Auto-create output dir
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  job:
+    chdir: true
+
+# Data settings
+data:
+  train_path: data/TinyStoriesV2-GPT4-train_10000.npy
+  val_path: data/TinyStoriesV2-GPT4-valid_10000.npy
+  vocab_size: 10000
+  vocab_path: data/vocab_tiny_stories_train_10000.json
+
+# Checkpoint settings
+checkpointing:
+  log_interval: 10 # log every 200 iterations
+  save_ckpt_interval: 200 # save checkpoint every 2000 iterations
+  eval_interval: 2000 # evaluate every 2000 iterations
+  keep_last: 5
+  save_dir: checkpoints
+  load_dir: checkpoints
+  load_iteration: 0
+  load_model: null
+  load_optimizer: null
+  load_data: null

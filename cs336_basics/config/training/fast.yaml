@@ -1,0 +1,16 @@
+# config/training/fast.yaml
+batch_size: 80
+num_workers: 2
+beta_1: 0.9
+beta_2: 0.999
+eps: 1e-8
+weight_decay: 0.01
+num_epochs: 1
+max_steps: 20000 # previous 20000
+# lr_min: 1e-4
+# lr_warmup_init_fraction: 0.01
+lr_min_fraction: 0.01
+lr_max: 5e-4
+T_warmup: 500 # previous 500
+T_cosine: 20000 # previous 20000
+max_grad_l2_norm: 1.0
