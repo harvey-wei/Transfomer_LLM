@@ -280,7 +280,7 @@ def train(cfg: DictConfig):
             # update parameters
             optimizer.step()
 
-            if iteration > 0 and iteration % cfg.checkpointing.log_interval == 0:
+            if iteration > 0 and iteration % cfg.checkpointing.save_ckpt_interval == 0:
                 # evaluate model on validation data
                 # print(f"Evaluating model on validation data at iteration {iteration}")
                 # model.eval()
@@ -322,6 +322,16 @@ def train(cfg: DictConfig):
             iteration += 1
 
             if iteration >= cfg.training.max_steps:
+                # save checkpoint as file name: checkpoint_time_epoch_iteration.
+                current_time = time.strftime("%Y-%m-%d_%H-%M-%S")
+                ckpt_file_name = f'ckpt_{current_time}_epoch_{epoch}_last_iter.pt'
+                ckpt_full_path = Path(checkpoint_dir) / ckpt_file_name
+                save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    iteration=iteration,
+                    out=ckpt_full_path,
+                )
                 print(f"Reached maximum number of steps: {cfg.training.max_steps}")
                 break
 

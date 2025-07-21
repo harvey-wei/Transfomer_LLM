@@ -17,7 +17,7 @@ import torch.optim as optim
 
 from cs336_basics.checkpoint import save_checkpoint, load_checkpoint
 from cs336_basics.ce_loss import CrossEntropyLoss
-from cs336_basics.optimizer import AdamWLR, CosineLR, gradient_clipping
+from cs336_basics.optimizer import AdamW, CosineLRScheduler, gradient_clipping
 from cs336_basics.bpe_tokenzier import train_bpe, BPETokenizer
 from cs336_basics.transformer_arch import TransformerLM
 from cs336_basics.inference import compute_perplexity, compute_val_loss
@@ -108,14 +108,20 @@ def train(cfg: DictConfig):
     cos_T_warmup=cfg.training.T_warmup
     cos_T_cosine=cfg.training.T_cosine
 
-    optimizer = AdamWLR(
+    optimizer = AdamW(
         model.parameters(),
-        lr_schedule=CosineLR(cos_lr_min, cos_lr_max, cos_T_warmup, cos_T_cosine),
         lr=cfg.training.lr_max,
         betas=(cfg.training.beta_1, cfg.training.beta_2),
         eps=cfg.training.eps,
         weight_decay=cfg.training.weight_decay,
-        last_step=-1,
+    )
+
+    scheduler = CosineLRScheduler(
+        optimizer,
+        lr_min=cos_lr_min,
+        lr_max=cos_lr_max,
+        T_warmup=cos_T_warmup,
+        T_cosine=cos_T_cosine,
     )
 
     # training loop over data_loader directly with epoch
@@ -131,8 +137,10 @@ def train(cfg: DictConfig):
         loss = loss_fn(logits, next_tokens)
 
         # backward pass
-        optimizer.zero_grad()
-        loss.backward()
+        scheduler.step() # update lr of optimizer
+
+        optimizer.zero_grad() # zero grad of optimizer
+        loss.backward() # backward pass to compute and accumulate grad of model parameters
         gradient_clipping(model.parameters(), cfg.training.max_grad_l2_norm)
         optimizer.step()
 

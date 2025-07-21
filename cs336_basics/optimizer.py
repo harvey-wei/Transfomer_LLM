@@ -1,6 +1,7 @@
 import torch
 import math
 from typing import Optional, Iterable, Callable
+from checkpoint import save_checkpoint, load_checkpoint
 # from torch.utils.tensorboard import SummaryWriter
 import os
 import matplotlib.pyplot as plt
@@ -24,8 +25,8 @@ class AdamW(torch.optim.Optimizer):
         
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
+        self.global_step = 1 # use one-based index for global step
         
-    
     def step(self, closure: Optional[Callable] = None):
         loss = None if closure is None else closure()
 
@@ -64,6 +65,8 @@ class AdamW(torch.optim.Optimizer):
                 # update m and v
                 state['m'] = m
                 state['v'] = v
+        
+        self.global_step += 1
     
         return loss
                 
@@ -93,6 +96,45 @@ class CosineLR():
             return self.lr_min
 
 # Note that we should make optimzer a parameter lr_schedule for safe checkpointing and loading
+
+class CosineLRScheduler():
+    def __init__(self, optimizer, lr_min, lr_max, T_warmup, T_cosine):
+        '''
+        Cosine learning rate scheduler.
+        :param optimizer instance: the optimizer to update the learning rate of
+        :param lr_min: minimum learning rate
+        :param lr_max: maximum learning rate
+        :param T_warmup: number of warmup iterations
+        :param T_cosine: number of cosine iterations
+        Note that step is zero-based index. While T_warmup and T_cosine are one-based index.
+        We ignore the difference between zero-based and one-based index in the implementation.
+        '''
+        self.optimizer = optimizer
+        self.lr_min = lr_min
+        self.lr_max = lr_max
+        self.T_warmup = T_warmup
+        self.T_cosine = T_cosine
+    
+    def get_lr(self):
+        t = self.optimizer.global_step
+        if t < self.T_warmup:
+            return t * self.lr_max / self.T_warmup
+        elif t >= self.T_warmup and t <= self.T_cosine:
+            return self.lr_min + 0.5 * (self.lr_max - self.lr_min) * (1 + math.cos(math.pi * (t - self.T_warmup) / (self.T_cosine - self.T_warmup)))
+        else:
+            # t > T_cosine: constant lr = lr_min
+            return self.lr_min
+
+    def step(self):
+        '''
+        Update the learning rate of the optimizer.
+        '''
+        lr = self.get_lr()
+
+        for group in self.optimizer.param_groups:
+            group['lr'] = lr
+
+        
 '''
 
 import torch
@@ -148,7 +190,7 @@ class AdamWLR(torch.optim.Optimizer):
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay, last_step=last_step, lr_schedule=lr_schedule)
         super().__init__(params, defaults)
         
-    
+    @torch.no_grad()
     def step(self, closure: Optional[Callable] = None):
         loss = None if closure is None else closure()
 
@@ -309,9 +351,51 @@ def test_AdamWLR():
     plt.savefig('lr_cosine_schedule.png')
     print('Saved figure to lr_cosine_schedule.png')
 
+def test_CosineLRSchedulerWithAdamW():
+    '''
+    Ensure step and lr of optimizer are updated correctly.
+    '''
+    model = torch.nn.Linear(10, 10)
+    optimizer = AdamW(model.parameters(), lr=0.1)
+    scheduler = CosineLRScheduler(optimizer, lr_min=0.01, lr_max=0.1, T_warmup=10, T_cosine=100)
+    model.train()
+
+    lrs = []
+    steps = []
+    ckpt_every = 10
+    for t in range(100):
+        x = torch.randn(10)
+        y = model(x)
+        loss = (y - x).mean()
+        loss.backward()
+        print(f'loss: {loss.item()}')
+
+        # you have to call scheduler.step() before optimizer.step()
+        scheduler.step() # update lr of optimizer
+
+        lrs.append(optimizer.param_groups[0]['lr'])
+        steps.append(optimizer.global_step)
+
+        optimizer.zero_grad()
+        optimizer.step() # update parameters and increment global step
+
+        if t  == 99:
+            print(f'Saving checkpoint at step {t}')
+            save_checkpoint(model, optimizer, t, 'ckpt_final.pt')
+
+    plt.plot(steps, lrs)
+    plt.savefig('lr_cosine_schedule_steps.png')
+    print('Saved figure to lr_cosine_schedule_steps.png')
+
+    # load checkpoint
+    last_step = load_checkpoint('ckpt_final.pt', model, optimizer)
+
+
+
 
 if __name__ == "__main__":
-    test_AdamWLR()
+    # test_AdamWLR()
+    test_CosineLRSchedulerWithAdamW()
     # lr_min = 0.01
     # lr_max = 0.1
     # T_warmup = 10
